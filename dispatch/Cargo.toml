@@ -1,0 +1,6 @@
+[package]
+name = "Dispatch"
+version = "0.1.0"
+authors = ["M.Kobayashi <nao.kobayashi@nifty.com>"]
+
+[dependencies]
