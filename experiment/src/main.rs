@@ -10,7 +10,7 @@ fn main() {
     }
 
     for i in v {
-        println!("Take ownership of the vector and its element {}", i);
+        println!("rTake ownership of the vector and its element {}", i);
     }
 
     let x = 5;
