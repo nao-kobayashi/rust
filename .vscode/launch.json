@@ -5,16 +5,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "type": "lldb",
-            "request": "launch",
-            "sourceLanguages": [
-                "rust"
-            ],
-            "preLaunchTask": "cargo build",
-            "internalConsoleOptions": "openOnFirstSessionStart",
             "name": "Debug",
-            "program": "${workspaceRoot}/anagram/target/debug",
-            "args": ["cat"],
+            "type": "gdb",
+            "request": "launch",
+            "target": "./target/debug/helloworld",
             "cwd": "${workspaceRoot}"
         }
     ]

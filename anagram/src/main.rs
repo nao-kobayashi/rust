@@ -40,8 +40,8 @@ impl Anagram {
 
 
 fn main() {
-    let word = std::env::args().nth(1).expect("Usage: word");
+    let word1 = std::env::args().nth(1).expect("Usage: word");
     let table = Anagram::new("/usr/share/dict/words").expect("failed to make table");
 
-    println!("{:?}", table.find(&word));
+    println!("{:?}", table.find(&word1));
 }
