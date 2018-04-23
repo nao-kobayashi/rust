@@ -1,7 +1,8 @@
 use std::str;
+use std::fs::read_dir;
 use std::path::PathBuf;
 use std::thread;
-use std::net::{TcpListener,TcpStream};
+use std::net::{TcpListener,TcpStream,IpAddr,Ipv4Addr,SocketAddr};
 use std::io::{Read, Write};
 
 mod result_code;
@@ -79,6 +80,7 @@ struct Client {
     cwd: PathBuf,
     stream: TcpStream,
     name: Option<String>,
+    data_writer: Option<TcpStream>,
 }
 
 impl Client {
@@ -87,6 +89,7 @@ impl Client {
             cwd: PathBuf::from("/"),
             stream: stream,
             name: None,
+            data_writer: None,
         }
     }
 
@@ -103,20 +106,67 @@ impl Client {
                     send_cmd(&mut self.stream, ResultCode::UserLoggedIn, &format!("Welcome {}!", username))
                 }
             },
+            Command::List => {
+                if let Some(ref mut data_writer) = self.data_writer {
+                    let mut tmp = PathBuf::from(".");
+                    send_cmd(&mut self.stream, ResultCode::DataConnectionAlreadyOpen, "Starting to list directory...");
+                    let mut out = String::new();
+                    for entry in read_dir(tmp).unwrap() {
+                        if let Ok(entry) = entry {
+                            add_file_info(entry.path(), &mut out);
+                        }
+                        send_data(data_writer, &out)
+                    }
+                } else {
+                    send_cmd(&mut self.stream, ResultCode::ConnectionClosed, "No opened data connection");
+                }
+
+                if self.data_writer.is_some() {
+                    self.data_writer = None;
+                    send_cmd(&mut self.stream, ResultCode::ClosingDataConnection, "Transfer Done...");
+                }
+            },
             Command::NoOp => send_cmd(&mut self.stream, ResultCode::Ok, "Doing nothing..."),
-            Command::Pwd => {
+            Command::Pwd | Command::XPwd => {
                 let msg = format!("{}", self.cwd.to_str().unwrap_or(""));
                 if !msg.is_empty() {
-                    let message = format!("\"/{}\" ", msg);
+                    let message;
+                    if msg == "/" {
+                         message = format!("\"{}\" ", msg);
+                    } else {
+                         message = format!("\"/{}\" ", msg);
+                    }
                     send_cmd(&mut self.stream, ResultCode::PATHNAMECreated, &message)
                 } else {
                     send_cmd(&mut self.stream, ResultCode::FileNotFound, "No such file or directory")
+                }
+            },
+            Command::Pasv => {
+                if self.data_writer.is_some() {
+                    send_cmd(&mut self.stream, ResultCode::DataConnectionAlreadyOpen, "Already listening...")
+                } else {
+                    let port = 43210;
+                    send_cmd(&mut self.stream, ResultCode::EnteringPassiveMode, &format!("127.0.0.1 {} {}", port >> 8, port & 0xFF));
+                    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port);
+                    let listener = TcpListener::bind(&addr).unwrap();
+                    match listener.incoming().next() {
+                        Some(Ok(client)) => {
+                            self.data_writer = Some(client);
+                        },
+                        _ => {
+                            send_cmd(&mut self.stream, ResultCode::ServiceNotAvailable, "issues happen");
+                        }
+                    }
                 }
             },
             Command::Cwd(_path) => send_cmd(&mut self.stream, ResultCode::CommandNotImplemented, "Not implemented"),
             Command::Unknown(_s) => send_cmd(&mut self.stream, ResultCode::UnknownCommand, "Not implemented"),
         }
     }
+}
+
+fn send_data(stream: &mut TcpStream, s: &str) {
+    write!(stream, "{}", s).unwrap();
 }
 
 fn send_cmd(stream: &mut TcpStream, code: result_code::ResultCode, message: &str) {
@@ -128,4 +178,47 @@ fn send_cmd(stream: &mut TcpStream, code: result_code::ResultCode, message: &str
 
     println!("<====={}", msg);
     write!(stream, "{}", msg).unwrap()
+}
+
+fn add_file_info(path: PathBuf, out: &mut String) {
+    let extra = if path.is_dir() {"/"} else {""};
+    let is_dir = if path.is_dir() {"d"} else {"-"};
+
+    let meta = match std::fs::metadata(&path) {
+        Ok(meta) => meta,
+        _ => return,
+    };
+
+    let (time, file_size) = get_fileinfo(&meta);
+    let path = match path.to_str() {
+        Some(path) => match path.split("/").last() {
+            Some(path) => path,
+            _ => return,
+        },
+        _ => return,
+    };
+
+    let rights = if meta.permissions().readonly() {
+        "r--r--r--"
+    } else {
+        "rw-rw-rw-"
+    };
+
+    let file_str = format!("{is_dir}{rights} {links} {owner} {group} {size} {month} 
+        {day} {hour}:{min} {path}{extra}\r\n",
+        is_dir=is_dir,
+        rights=rights,
+        links=1, // number of links
+        owner="anonymous", // owner name
+        group="anonymous", // group name
+        size=file_size,
+        month=time.tm_mon as usize,
+        day=time.tm_mday,
+        hour=time.tm_hour,
+        min=time.tm_min,
+        path=path,
+        extra=extra);
+
+    out.push_str(&file_str);
+    println!("==>{:?}", &file_str);
 }
