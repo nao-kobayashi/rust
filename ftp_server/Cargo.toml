@@ -1,6 +1,7 @@
 [package]
-name = "ftp_server"
+name = "ftp"
 version = "0.1.0"
-authors = ["M.Kobayashi <nao.kobayashi@nifty.com>"]
+authors = ["kobayashi"]
 
 [dependencies]
+cfg-if = "0.1.2"

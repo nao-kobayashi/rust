@@ -1,17 +1,19 @@
-use std::str;
-use std::path::PathBuf;
+extern crate time;
+#[macro_use]
+extern crate cfg_if;
+
 use std::thread;
 use std::net::{TcpListener,TcpStream};
-use std::io::{Read, Write};
-
-mod result_code;
-use result_code::ResultCode;
+use std::io::Read;
 
 mod command;
+mod result_code;
+mod client;
+use result_code::ResultCode;
 use command::Command;
+use client::*;
 
-
-pub fn handle_client(mut stream: TcpStream) {
+fn handle_client(mut stream: TcpStream) {
     println!("New client connected!");
     send_cmd(&mut stream, ResultCode::ServiceReadyForNewUser, "Welcome to this FTP server!");
     let mut client = Client::new(stream);
@@ -70,62 +72,4 @@ fn main() {
             }
         }
     }
-}
-
-
-
-
-struct Client {
-    cwd: PathBuf,
-    stream: TcpStream,
-    name: Option<String>,
-}
-
-impl Client {
-    pub fn new(stream: TcpStream) -> Client {
-        Client {
-            cwd: PathBuf::from("/"),
-            stream: stream,
-            name: None,
-        }
-    }
-
-    pub fn handle_cmd(&mut self, cmd: Command) {
-        println!("=====>{:?}", cmd);
-        match cmd {
-            Command::Auth => send_cmd(&mut self.stream, ResultCode::CommandNotImplemented, "Not implemented"),
-            Command::Syst => send_cmd(&mut self.stream, ResultCode::Ok, "I won't tell"),
-            Command::User(username) => {
-                if username.is_empty() {
-                    send_cmd(&mut self.stream, ResultCode::InvalidParameterOrArgument, "Invalid username")
-                } else {
-                    self.name = Some(username.to_owned());
-                    send_cmd(&mut self.stream, ResultCode::UserLoggedIn, &format!("Welcome {}!", username))
-                }
-            },
-            Command::NoOp => send_cmd(&mut self.stream, ResultCode::Ok, "Doing nothing..."),
-            Command::Pwd => {
-                let msg = format!("{}", self.cwd.to_str().unwrap_or(""));
-                if !msg.is_empty() {
-                    let message = format!("\"/{}\" ", msg);
-                    send_cmd(&mut self.stream, ResultCode::PATHNAMECreated, &message)
-                } else {
-                    send_cmd(&mut self.stream, ResultCode::FileNotFound, "No such file or directory")
-                }
-            },
-            Command::Cwd(_path) => send_cmd(&mut self.stream, ResultCode::CommandNotImplemented, "Not implemented"),
-            Command::Unknown(_s) => send_cmd(&mut self.stream, ResultCode::UnknownCommand, "Not implemented"),
-        }
-    }
-}
-
-fn send_cmd(stream: &mut TcpStream, code: result_code::ResultCode, message: &str) {
-    let msg = if message.is_empty() {
-        format!("{}\r\n", code as u32)
-    } else {
-        format!("{} {}\r\n", code as u32, message)
-    };
-
-    println!("<====={}", msg);
-    write!(stream, "{}", msg).unwrap()
 }

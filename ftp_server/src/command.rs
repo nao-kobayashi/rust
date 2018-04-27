@@ -8,9 +8,14 @@ pub enum Command {
     Auth,
     Syst,
     User(String),
+    List(PathBuf),
+    Nlst(PathBuf),
     NoOp,
     Pwd,
+    XPwd,
+    Pasv,
     Cwd(PathBuf),
+    Cdup,
     Unknown(String),
 }
 
@@ -20,9 +25,14 @@ impl AsRef<str> for Command {
             Command::Auth => "AUTH",
             Command::Syst => "SYST",
             Command::User(_) => "USER",
+            Command::List(_) => "LIST",
+            Command::Nlst(_) => "NLST",
             Command::NoOp => "NOOP",
             Command::Pwd => "PWD",
+            Command::XPwd => "XPWD",
+            Command::Pasv => "PASV",
             Command::Cwd(_) => "CWD",
+            Command::Cdup => "CDUP",
             Command::Unknown(_) => "UNKN",
         }
     }
@@ -38,10 +48,15 @@ impl Command {
             match command.as_slice() {
                 b"AUTH" => Command::Auth,
                 b"SYST" => Command::Syst,
+                b"LIST" => Command::List(data.map(|bytes| Path::new(str::from_utf8(&bytes.to_vec()).unwrap()).to_path_buf()).unwrap()),
+                b"NLST" => Command::Nlst(data.map(|bytes| Path::new(str::from_utf8(&bytes.to_vec()).unwrap()).to_path_buf()).unwrap()),
                 b"NOOP" => Command::NoOp,
                 b"PWD" => Command::Pwd,
+                b"XPWD" => Command::XPwd,
+                b"PASV" => Command::Pasv,
                 b"USER" => Command::User(data.map(|bytes|String::from_utf8(bytes.to_vec()).expect("cannot convert bytes to String")).unwrap_or_default()),
-                b"CWD" => Command::Cwd(data.map(|bytes| Path::new(str::from_utf8(bytes).unwrap()).to_path_buf()).unwrap()),
+                b"CWD" => Command::Cwd(data.map(|bytes| Path::new(str::from_utf8(&bytes.to_vec()).unwrap()).to_path_buf()).unwrap()),
+                b"CDUP" => Command::Cdup,
                 s => Command::Unknown(str::from_utf8(s).unwrap_or("").to_owned()),
             };
         Ok(command)
