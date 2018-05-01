@@ -6,8 +6,8 @@ use std::fs::*;
 use std::path::PathBuf;
 use chrono::prelude::*;
 use std::process::Command;
-use std::str::FromStr;
-use ini::Ini;
+
+mod conf_ini;
 
 struct Arguments {
     path_from: PathBuf,
@@ -44,39 +44,6 @@ fn check_arguments(args: &Vec<String>) -> Result<Arguments, String> {
     Ok(arguments)
 }
 
-fn get_ini(path: &String) -> Ini {
-    let ini_file = Ini::load_from_file(get_ini_path(path)).unwrap();
-    ini_file
-}
-
-fn get_ini_path(path: &String) -> String {
-    path.clone() + "\\conf.ini"
-}
-
-fn get_ini_value(path: String, key: String) -> String {
-    let mut value = String::new();
-    let ini_file = get_ini(&path);
-    for (sec, prop) in ini_file.iter() {
-        if *sec == Some("kihon".to_string()) {
-            for (k, v) in prop.iter() {
-                if *k == key {
-                     value = String::from_str(&*v.to_string()).expect("failed read ini file.");
-                }
-            }
-        }
-    }
-    value
-}
-
-fn set_ini_modified_date(path: String, date: DateTime<Local>) {
-    let conf_path = get_ini_path(&path);
-    let mut ini_file = get_ini(&path);
-    ini_file.set_to(Some("kihon"), "lastmoddate".to_string(), date.to_string());
-    match ini_file.write_to_file(&conf_path) {
-        Err(_) => println!("conf.ini write error"),
-        Ok(_) => println!("conf.ini write {:?}", date.to_string()),
-    }
-}
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -87,6 +54,7 @@ fn main() {
             },
             Err(e) => panic!("{:?}", e)
         };
+    let inifile = conf_ini::ConfIni::new(&exe_path);
 
     //パラメータのチェック
     let mut arguments = match check_arguments(&args) {
@@ -100,7 +68,7 @@ fn main() {
     };
 
     //1日前をセット
-    let date = get_ini_value(exe_path.clone(), "lastmoddate".to_string());
+    let date = inifile.get_ini_value("lastmoddate".to_string());
     let last_update_date: DateTime<Local> = match DateTime::parse_from_str(&date, "%Y-%m-%d %H:%M:%S%.6f %z") {
         Ok(date) => {
             Local.datetime_from_str(&date.to_string(), "%Y-%m-%d %H:%M:%S%.6f %z").unwrap()
@@ -154,12 +122,8 @@ fn main() {
         },
     }
     
-
-    //最も新しかった日付を保存
-    set_ini_modified_date(exe_path.clone(), most_newest_date);
-
     //外部プログラム呼び出し
-    let command_name = get_ini_value(exe_path.clone(), "command".to_string());
+    let command_name = inifile.get_ini_value("command".to_string());
     if !command_name.is_empty() {
         Command::new(command_name)
             .arg(&arguments.path_to)
@@ -182,5 +146,8 @@ fn main() {
             }
         }
     }
-}
 
+    //最も新しかった日付を保存
+    inifile.set_ini_modified_date(&exe_path, most_newest_date);
+
+}
