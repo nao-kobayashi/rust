@@ -8,9 +8,9 @@
             "name": "Debug",
             "type": "gdb",
             "request": "launch",
-            "target": ".\\mandelbrot\\target\\debug\\mandelbrot",
+            "target": ".\\zipr\\target\\debug\\zipr",
             "cwd": "${workspaceRoot}",
-            "arguments": "mandel.png 4000x3000 -1.20,0.35 -1,0.20"
+            "arguments": "c:\\work\\gdb-7.9.1-tdm64-2\\gdb64\\bin\\gdbserver.exe c:\\work\\gdb-7.9.1-tdm64-2\\COPYING3-gdb-tdm.txt"
         }
     ]
 }

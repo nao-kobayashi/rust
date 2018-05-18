@@ -111,7 +111,7 @@ impl EndCentDirHeader  {
 impl CentralDirHeader {
     fn new() -> CentralDirHeader{
         CentralDirHeader {
-            signature: 0x04034B50,
+            signature: 0x02014B50,
             madever: 10,
             needver: 0,
             option: 0,
@@ -143,7 +143,7 @@ fn init_crc32() -> [u32; 256] {
     for i in 0..256 {
         let mut u = i;
 
-        for j in 0..8 {
+        for _j in 0..8 {
             if u & 0x1 == 1 {
                 u = (u >> 1) ^ poly;
             } else {
@@ -164,7 +164,7 @@ fn get_crc32(buffer: &Vec<u8>, crc32_start: u32, table: [u32; 256]) -> u32 {
         result = (result >> 8) ^table[(buffer[i as usize] ^(result as u8 & 0xFF)) as usize];
     }
 
-    result
+    !result
 }
 
 // 日付を取得  
