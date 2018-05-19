@@ -1,4 +1,10 @@
 extern crate chrono;
+extern crate flate2;
+
+use std::io::prelude::*;
+use flate2::Compression;
+use flate2::write::ZlibEncoder;
+
 
 use std::env;
 use std::fs::*;
@@ -6,7 +12,6 @@ use std::path::PathBuf;
 use std::mem::transmute;
 use chrono::prelude::*;
 use std::io::{BufReader, Read, BufWriter, Write};
-
 
 struct ZipHeader {
     signature: u32,
@@ -113,9 +118,9 @@ impl CentralDirHeader {
         CentralDirHeader {
             signature: 0x02014B50,
             madever: 10,
-            needver: 0,
+            needver: 20,
             option: 0,
-            comptype: 0,
+            comptype: 8,
             filetime: 0,
             filedate: 0,
             crc32: 0,
@@ -213,8 +218,7 @@ fn main() {
             header.filename = path.file_name().unwrap().to_os_string().into_string().unwrap();
 
             //圧縮したら変更する。
-            header.compsize = meta.len() as u32;
-            header.uncompsize = header.compsize;
+            header.uncompsize = meta.len() as u32;
 
             //ファイル読み込み
             let mut buffer: [u8; BUF_SIZE] = [0; BUF_SIZE];
@@ -233,8 +237,17 @@ fn main() {
                 }
             };
 
-            header.crc32 = get_crc32(&file_bytes, 0xffffffff, header.crc_table);
-            header.filedata = file_bytes;
+
+
+{
+            let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+            encoder.write_all(file_bytes.as_slice()).unwrap();
+            let comp_file = encoder.finish().unwrap();
+
+            header.crc32 = get_crc32(&comp_file, 0xffffffff, header.crc_table);
+            header.compsize = comp_file.len() as u32;
+            header.filedata = comp_file;
+}
 
             let mut central = CentralDirHeader::new();
             copy_to_centraldir(&mut central, &header);
@@ -247,7 +260,7 @@ fn main() {
     let mut index = 0;
     let mut pos_archive:usize = 0;
     let mut writer = BufWriter::new(File::create("test.zip").unwrap());
-    for file in write_source {
+    for mut file in write_source {
         write_source_central[index].headerpos = pos_archive as u32;
         index += 1;
 
@@ -265,6 +278,7 @@ fn main() {
         pos_archive += write_u8(&mut writer, Vec::from(file.filename));
         //writer.write(file.extradate);
         pos_archive += write_u8(&mut writer, file.filedata);
+
     }
 
     //中間ディレクトリの書き込み
