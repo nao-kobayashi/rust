@@ -240,9 +240,12 @@ fn main() {
 
 
 {
-            let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+            //圧縮処理 正しく動かない。
+            /*let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
             encoder.write_all(file_bytes.as_slice()).unwrap();
-            let comp_file = encoder.finish().unwrap();
+            let comp_file = encoder.finish().unwrap();*/
+            let comp_file = file_bytes;
+
 
             header.crc32 = get_crc32(&comp_file, 0xffffffff, header.crc_table);
             header.compsize = comp_file.len() as u32;
