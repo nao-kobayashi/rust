@@ -75,9 +75,9 @@ impl ZipHeader {
 
         ZipHeader {
             signature: 0x04034B50,
-            needver: 10,
+            needver: 20,
             option: 0,
-            comptype: 0,
+            comptype: 8,
             filetime: 0,
             filedate: 0,
             crc32: 0,
@@ -117,7 +117,7 @@ impl CentralDirHeader {
     fn new() -> CentralDirHeader{
         CentralDirHeader {
             signature: 0x02014B50,
-            madever: 10,
+            madever: 20,
             needver: 20,
             option: 0,
             comptype: 8,
@@ -241,10 +241,10 @@ fn main() {
 
 {
             //圧縮処理 正しく動かない。
-            /*let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+            let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
             encoder.write_all(file_bytes.as_slice()).unwrap();
-            let comp_file = encoder.finish().unwrap();*/
-            let comp_file = file_bytes;
+            let comp_file = encoder.finish().unwrap();
+            //let comp_file = file_bytes;
 
 
             header.crc32 = get_crc32(&comp_file, 0xffffffff, header.crc_table);
