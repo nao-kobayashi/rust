@@ -5,4 +5,4 @@ authors = ["kobayashi@kouei.co.jp <kobayashi@kouei.co.jp>"]
 
 [dependencies]
 chrono = "^0.4.0"
-flate2 = { version = "^1.0", features = ["rust_backend"], default-features = false }
+deflate = "*"
