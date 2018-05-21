@@ -1,176 +1,22 @@
 extern crate chrono;
-extern crate flate2;
+extern crate deflate;
+extern crate zipr;
 
-use std::io::prelude::*;
-use flate2::Compression;
-use flate2::write::ZlibEncoder;
+use deflate::deflate_bytes;
 
-
-use std::env;
+use std::{env, process};
 use std::fs::*;
 use std::path::PathBuf;
-use std::mem::transmute;
 use chrono::prelude::*;
 use std::io::{BufReader, Read, BufWriter, Write};
 
-struct ZipHeader {
-    signature: u32,
-    needver: u16,
-    option: u16,
-    comptype: u16,
-    filetime: u16,
-    filedate: u16,
-    crc32: u32,
-    compsize: u32,
-    uncompsize: u32,
-    fnamelen: u16,
-    extralen: u16,
-    crc_table: [u32; 256],
-    filename: String,
-    extradata: u8,
-    filedata: Vec<u8>
-}
+use zipr::zip_header::ZipHeader;
+use zipr::central_dir_header::CentralDirHeader;
+use zipr::end_cent_dir_header::EndCentDirHeader;
+use zipr::util::*;
 
-struct EndCentDirHeader  {  
-    signature: u32,
-    disknum: u16,
-    startdisknum: u16,  
-    diskdirentry: u16,
-    direntry: u16,
-    dirsize: u32,
-    startpos: u32,
-    commentlen: u16, 
-    comment: String,
-}
+const BUF_SIZE: usize = 1048576;
 
-
-
-struct CentralDirHeader  
-{  
-    signature: u32,
-    madever: u16,
-    needver: u16,
-    option: u16,
-    comptype: u16,
-    filetime: u16,
-    filedate: u16,
-    crc32: u32,
-    compsize: u32,
-    uncompsize: u32,
-    fnamelen: u16,
-    extralen: u16,
-    commentlen: u16,
-    disknum: u16,
-    inattr: u16,
-    outattr: u32,
-    headerpos: u32,
-    filename: String,
-    extradata: u8,
-    comment: String,
-}
-
-impl ZipHeader {
-    pub fn new() -> ZipHeader {
-        let def_crc32 = init_crc32();
-
-        ZipHeader {
-            signature: 0x04034B50,
-            needver: 20,
-            option: 0,
-            comptype: 8,
-            filetime: 0,
-            filedate: 0,
-            crc32: 0,
-            compsize: 0,
-            uncompsize: 0,
-            fnamelen: 0,
-            extralen: 0,
-            crc_table: def_crc32,
-            filename: "".to_string(),
-            extradata: 0,
-            filedata: Vec::new()
-        }
-    }
-
-}
-
-
-impl EndCentDirHeader  {  
-    pub fn new () -> EndCentDirHeader {
-        EndCentDirHeader{
-            signature: 0x06054B50,
-            disknum: 0,
-            startdisknum: 0,  
-            diskdirentry: 0,
-            direntry: 0,
-            dirsize: 0,
-            startpos: 0,
-            commentlen: 0,
-            comment: "".to_string()
-
-        }
-    }
-}
-
-
-impl CentralDirHeader {
-    fn new() -> CentralDirHeader{
-        CentralDirHeader {
-            signature: 0x02014B50,
-            madever: 20,
-            needver: 20,
-            option: 0,
-            comptype: 8,
-            filetime: 0,
-            filedate: 0,
-            crc32: 0,
-            compsize: 0,
-            uncompsize: 0,
-            fnamelen: 0,
-            extralen: 0,
-            commentlen: 0,
-            disknum: 0,
-            inattr: 0,
-            outattr: 0,
-            headerpos: 0,
-            filename: "".to_string(),
-            extradata: 0,
-            comment: "".to_string(),
-        }
-    }
-}
-
-
-fn init_crc32() -> [u32; 256] {
-    let poly: u32 = 0xEDB88320;
-    let mut crc_table: [u32; 256] = [0; 256];
-
-    for i in 0..256 {
-        let mut u = i;
-
-        for _j in 0..8 {
-            if u & 0x1 == 1 {
-                u = (u >> 1) ^ poly;
-            } else {
-                u >>= 1;
-            }
-        }
-
-        crc_table[i as usize] = u;
-    }
-    
-    crc_table
-}
-
-fn get_crc32(buffer: &Vec<u8>, crc32_start: u32, table: [u32; 256]) -> u32 {
-    let mut result = crc32_start;
-
-    for i in 0..buffer.len() {
-        result = (result >> 8) ^table[(buffer[i as usize] ^(result as u8 & 0xFF)) as usize];
-    }
-
-    !result
-}
 
 // 日付を取得  
 fn get_dos_date(year: u16, month: u16, day: u16) -> u16 {
@@ -182,27 +28,22 @@ fn get_dos_time(hour: u16, muinute: u16, second: u16) -> u16 {
     hour << 11 | muinute << 5 | second >> 1
 }
 
-fn cnv_u32_to_bytes(val: u32) -> [u8; 4]{
-    unsafe{ transmute(val) }
-}
-
-fn cnv_u16_to_bytes(val: u16) -> [u8; 2]{
-    unsafe{ transmute(val) }
-}
-/*
-fn cnv_u16_to_bytes(val: u16) -> [u8; 2]{
-    unsafe{ transmute(val) }
-}
-*/
-const BUF_SIZE: usize = 1048576;
-
 fn main() {
+
     let args: Vec<String> = env::args().skip(1).collect();
     let mut write_source: Vec<ZipHeader> = Vec::new();
     let mut write_source_central: Vec<CentralDirHeader> = Vec::new();
 
-    for file in args {
-        let path = PathBuf::from(&file);
+    if args.len() < 2 {
+        println!("パラメータの数が違います。");
+        process::exit(0);
+    }
+
+    let zip_output_path = &args[0].clone();
+    let len = *&args.len() as u32;
+
+    for i in 1..len   {
+        let path = PathBuf::from(&args[i as usize]);
         if path.is_file() {
             //ファイルヘッダ
             let mut header = ZipHeader::new();
@@ -214,8 +55,9 @@ fn main() {
             //ヘッダに値をセット
             header.filetime = get_dos_time(crt_date.hour() as u16, crt_date.minute() as u16, crt_date.second() as u16);
             header.filedate = get_dos_date(crt_date.year() as u16, crt_date.month() as u16, crt_date.day() as u16);
-            header.fnamelen = path.file_name().unwrap().to_os_string().len() as u16;
-            header.filename = path.file_name().unwrap().to_os_string().into_string().unwrap();
+            let file_name_info = get_filename(&path);
+            header.fnamelen = file_name_info.0 as u16;
+            header.filename = file_name_info.1;
 
             //圧縮したら変更する。
             header.uncompsize = meta.len() as u32;
@@ -238,22 +80,15 @@ fn main() {
             };
 
 
-
-{
-            //圧縮処理 正しく動かない。
-            let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
-            encoder.write_all(file_bytes.as_slice()).unwrap();
-            let comp_file = encoder.finish().unwrap();
-            //let comp_file = file_bytes;
-
-
-            header.crc32 = get_crc32(&comp_file, 0xffffffff, header.crc_table);
+            //圧縮処理
+            let comp_file = deflate_bytes(file_bytes.as_slice());
+            //圧縮元のファイルのCRCを計算する。
+            header.get_crc32(&file_bytes, 0xffffffff);
             header.compsize = comp_file.len() as u32;
             header.filedata = comp_file;
-}
 
             let mut central = CentralDirHeader::new();
-            copy_to_centraldir(&mut central, &header);
+            central.copy_to_centraldir(&header);
             write_source.push(header);
             write_source_central.push(central);
         }
@@ -262,7 +97,7 @@ fn main() {
     //書込み
     let mut index = 0;
     let mut pos_archive:usize = 0;
-    let mut writer = BufWriter::new(File::create("test.zip").unwrap());
+    let mut writer = BufWriter::new(File::create(zip_output_path).unwrap());
     for mut file in write_source {
         write_source_central[index].headerpos = pos_archive as u32;
         index += 1;
@@ -329,43 +164,5 @@ fn main() {
         Ok(_) => {},
         Err(e) => panic!("file save error {:?}", e)
     };
-}
 
-
-fn copy_to_centraldir(dirheader: &mut CentralDirHeader, zipheader: &ZipHeader) {
-	dirheader.needver = zipheader.needver;
-	dirheader.option = zipheader.option;
-	dirheader.comptype = zipheader.comptype;
-	dirheader.filetime = zipheader.filetime;
-	dirheader.filedate = zipheader.filedate;
-	dirheader.crc32 = zipheader.crc32;
-	dirheader.compsize = zipheader.compsize;
-	dirheader.uncompsize = zipheader.uncompsize;
-	dirheader.fnamelen = zipheader.fnamelen;
-	dirheader.extralen = zipheader.extralen;
-
-	dirheader.filename = zipheader.filename.clone();
-	dirheader.extradata = zipheader.extradata;
-}
-
-fn write_u8(writer: &mut Write, value: Vec<u8>) -> usize {
-    let buffer = value.as_slice();
-    match writer.write(&buffer) {
-        Ok(n) => n,
-        Err(e) => panic!("fail write {:?}", e)
-    }
-}
-
-fn write_u16(writer: &mut Write, value: u16) -> usize {
-    match writer.write(&cnv_u16_to_bytes(value)) {
-        Ok(n) => n,
-        Err(e) => panic!("fail write {:?}", e)
-    }
-}
-
-fn write_u32(writer: &mut Write, value: u32) -> usize {
-    match writer.write(&cnv_u32_to_bytes(value)) {
-        Ok(n) => n,
-        Err(e) => panic!("fail write {:?}", e)
-    }
 }
