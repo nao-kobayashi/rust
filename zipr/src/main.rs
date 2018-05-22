@@ -44,6 +44,7 @@ fn main() {
 
     for i in 1..len   {
         let path = PathBuf::from(&args[i as usize]);
+
         if path.is_file() {
             //ファイルヘッダ
             let mut header = ZipHeader::new();
@@ -91,6 +92,7 @@ fn main() {
             central.copy_to_centraldir(&header);
             write_source.push(header);
             write_source_central.push(central);
+
         }
     }
 
