@@ -1,0 +1,9 @@
+[package]
+name = "log_checker"
+version = "0.1.0"
+authors = []
+
+[dependencies]
+regex = "*"
+chrono = "*"
+rust-ini = "*"
