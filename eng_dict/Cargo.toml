@@ -1,0 +1,12 @@
+[package]
+name = "eng_dict"
+version = "0.1.0"
+authors = []
+
+[dependencies]
+iron = "*"
+router = "*"
+handlebars-iron = "*"
+params = "*"
+serde_urlencoded = "*"
+reqwest = "*"

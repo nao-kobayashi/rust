@@ -1,0 +1,19 @@
+<html>
+      <head>
+            <script type="text/javascript">
+                  window.onload = function() { 
+                        document.getElementById('msg').innerHTML = {{message}} 
+                  };
+            </script>
+      </head>
+      <body>
+            <form action={{translate_path}} method="POST">
+                  <h1>translate word</h1>
+                  <input type="text" name="word"/>
+                  <input type="submit" value="exec"/>
+
+                  <hr />
+                  <div id="msg"></div>
+            </form>
+      </body>
+</html>
