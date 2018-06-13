@@ -49,6 +49,8 @@ struct SearchFilter {
     phrase : String
 }
 
+const MONGO_DB : &str = "127.0.0.1";
+
 //todo
 //既にデータがあったらWEB apiを投げたくない。
 //構造体のところとかリファクタする。
@@ -91,7 +93,7 @@ fn main() {
     }
 
     fn get_translated_list() -> String {
-        let client = Client::connect("192.168.56.2", 27017).expect("'failed to connect mongodb'");
+        let client = Client::connect(MONGO_DB, 27017).expect("'failed to connect mongodb'");
         let coll = client.db("translate").collection("words_en");
 
         let cursor = match coll.find(None, None) {
@@ -190,7 +192,7 @@ fn main() {
     }
 
     fn check_exists(phrase: String) -> Result<i64, String> {
-        let client = Client::connect("192.168.56.2", 27017).expect("'failed to connect mongodb'");
+        let client = Client::connect(MONGO_DB, 27017).expect("'failed to connect mongodb'");
         let coll = client.db("translate").collection("words_en");
 
         let filter_str = format!("{{\"phrase\":\"{}\"}}", phrase);
@@ -224,7 +226,7 @@ fn main() {
     }
 
     fn save_mongodb(json: &TranslateResult) -> Result<(), String> {
-        let client = Client::connect("192.168.56.2", 27017).expect("'failed to connect mongodb'");
+        let client = Client::connect(MONGO_DB, 27017).expect("'failed to connect mongodb'");
         let coll = client.db("translate").collection("words_en");
 
 
