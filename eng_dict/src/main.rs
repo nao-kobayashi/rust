@@ -44,6 +44,14 @@ struct MeanItem {
     text: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct SearchFilter {
+    phrase : String
+}
+
+//todo
+//既にデータがあったらWEB apiを投げたくない。
+//構造体のところとかリファクタする。
 fn main() {
 
     fn top_handler(req: &mut Request) -> IronResult<Response> {
@@ -51,8 +59,9 @@ fn main() {
         let mut resp = Response::new();
         let mut data = HashMap::new();
         let url = format!("{}", url_for(req, "answer", HashMap::new()));
+        let word_list = format!("[{}]",  get_translated_list());
         data.insert(String::from("translate_path"), url);
-        //data.insert(String::from("list"), );
+        data.insert(String::from("list"), word_list);
         resp.set_mut(Template::new("index", data)).set_mut(status::Ok);
         Ok(resp)
     }
@@ -81,18 +90,47 @@ fn main() {
         Ok(resp)
     }
 
-    /*fn get_translated_list() -> String {
+    fn get_translated_list() -> String {
         let client = Client::connect("192.168.56.2", 27017).expect("'failed to connect mongodb'");
         let coll = client.db("translate").collection("words_en");
 
+        let cursor = match coll.find(None, None) {
+            Ok(cursor) => cursor,
+            Err(e) => {
+                return format!("error mongodb find. {:?}", e);
+            }
+        };
 
-        
-    }*/
+        let mut result_str = "".to_string();
+        for result in cursor {
+            if let Ok(item) = result {
+                let bson_obj = bson::Bson::from(item);
+                let json_obj: serde_json::value::Value = bson_obj.clone().into();
+                let data: TranslateResult = match serde_json::from_value(json_obj) {
+                    Ok(data) => data,
+                    Err(e) => return format!("error convert serde_json to object model. {}", e.to_string())
+                };
+                
+                if let Some(s) = data.phrase.clone() {
+                    if result_str != "" {
+                        result_str = result_str + ",";
+                    }
+                    result_str = result_str + &"{'phrase':'".to_string();
+                    result_str = result_str + &s;
+                    result_str = result_str + &"','words':[".to_string();
+                    result_str = result_str + &translate_result(&data);
+                    result_str = result_str + &"]}".to_string();
+                }
+            }
+        }
+
+        result_str
+    }
 
     fn get_translate_result(word: String) -> String {
         let enc_word = match serde_urlencoded::to_string(word.clone()) {
-            Ok(word) => word,
-            Err(_e) => word
+            Ok(word) => word.trim().to_string(),
+            Err(_e) => word.trim().to_string()
         };
 
         let url = format!("https://glosbe.com/gapi/translate?from=en&dest=ja&format=json&phrase={}&pretty=false", enc_word);
@@ -112,13 +150,30 @@ fn main() {
             Err(e) => return format!("'serialize error {}'", e.to_string())
         };
         
-        //save to mongodb
-        match save_mongodb(&data) {
-            Ok(()) => {},
-            Err(e) => return e.to_string()
+        if let Some(phrase) = data.phrase.clone() {
+            if data.tuc.len() > 0  {
+                match check_exists(phrase) {
+                    Ok(count) => {
+                        println!("record count:{}", count);
+                        if count == 0 {
+                            //save to mongodb
+                            match save_mongodb(&data) {
+                                Ok(()) => {},
+                                Err(e) => return e.to_string()
+                            }
+                        }
+                    },
+                    Err(e) => return e
+                }
+            }
         }
 
+        translate_result(&data)
+    }
+
+    fn translate_result(data: &TranslateResult) -> String {
         let mut result = "".to_string();
+
         for i in 0..data.tuc.len() {
             match &data.tuc[i].phrase {
                 &Some(ref p) => {
@@ -134,9 +189,44 @@ fn main() {
         result
     }
 
+    fn check_exists(phrase: String) -> Result<i64, String> {
+        let client = Client::connect("192.168.56.2", 27017).expect("'failed to connect mongodb'");
+        let coll = client.db("translate").collection("words_en");
+
+        let filter_str = format!("{{\"phrase\":\"{}\"}}", phrase);
+        println!("{}", filter_str);
+        let filter: SearchFilter =  match serde_json::from_str(filter_str.as_str()) {
+            Ok(j) => j,
+            Err(e) => return Err(format!("'serialize error at check_exists. {}'", e.to_string()))
+        };
+
+        let count = match bson::to_bson(&filter) {
+            Ok(filter_document) => {
+                match filter_document {
+                    bson::Bson::Document(filter_document_doc) => {
+                        match coll.count(Some(filter_document_doc), None) {
+                            Ok(count) => count,
+                            Err(e) => return Err(format!("'error mongodb count.{}'", &e.to_string()))
+                        }
+                    },
+                    _ =>  {
+                        return Err(format!("'failed to create filter document model.'"))
+                    }
+                }
+            },
+            Err(e) => {
+                return Err(format!("'failed to create filter document model.{}'", &e.to_string()));
+            }
+
+        };
+
+        Ok(count)
+    }
+
     fn save_mongodb(json: &TranslateResult) -> Result<(), String> {
         let client = Client::connect("192.168.56.2", 27017).expect("'failed to connect mongodb'");
         let coll = client.db("translate").collection("words_en");
+
 
         match bson::to_bson(&json) {
             Ok(document) => {

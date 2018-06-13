@@ -1,16 +1,73 @@
 <!doctype html>
 <html lang="ja">
       <head>
+            <style type="text/css">
+                  table, th, td {
+                        border-collapse: collapse;
+                        border: 1px solid #ccc;
+                        line-height: 1.5;
+                  }
+
+                  table.list th {
+                        min-width: 150px;
+                        max-width: 1000px;
+                        padding: 10px;
+                        font-weight: bold;
+                        vertical-align: top;
+                        background: #3f3f3f;
+                        color: #ffffff;
+                  }
+
+                  table.list td {
+                        min-width: 150px;
+                        max-width: 1000px;
+                        padding: 10px;
+                        vertical-align: top;
+                        font-size:large;
+                  }
+
+                  tr:nth-child(even) {
+                        background: #d9d9d9;
+                  }
+            </style>
+
             <script type="text/javascript">
                   var list = {{list}};
+
+                  window.onload = function() { 
+                        var table = document.getElementById('wordslist');
+
+                        for (var i = 0; i < list.length; i++) {
+                              var row = table.insertRow(-1);
+                              var cellWordEn = row.insertCell(-1);
+                              var cellMeanJa = row.insertCell(-1);
+                              cellWordEn.appendChild(document.createTextNode(list[i].phrase));
+
+                              var ja_str = '';
+                              for (var h = 0; h < list[i].words.length; h++) {
+                                    ja_str += list[i].words[h] + "/";
+                              }
+                              cellMeanJa.appendChild(document.createTextNode(ja_str));
+                        }
+                  };
             </script>
       </head>
       <body>
             <form action={{translate_path}} method="POST">
-                  <h1>translate word</h1>
+                  <h1>vocabulary notebook</h1>
                   <input type="text" name="word"/>
                   <input type="submit" value="exec"/>
                   <hr />
+                  <table id="wordslist" class="list">
+                        <tr>
+                              <th>
+                                    検索語句
+                              </th>
+                              <th>
+                                    意味
+                              </th>
+                        </tr>
+                  </table>
             </form>
       </body>
 </html>
