@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ja">
+      <head>
+            <script type="text/javascript">
+                  var words = {{message}};
+
+                  window.onload = function() { 
+                        for (var i = 0; i < words.tuc.length; i++) {
+                              document.getElementById('msg').innerHTML += "<div>" + words.tuc[i].phrase.text + "</div>";
+                        }
+                  };
+            </script>
+      </head>
+      <body>
+            <form action={{translate_path}} method="POST">
+                  <h1>vocabulary notebook</h1>
+                  <input type="text" name="word"/>
+                  <input type="submit" value="exec"/>
+                  <br />
+                  <a href="{{list_path}}">一覧へ戻る</a>
+                  <hr />
+                  <div id="msg"></div>
+            </form>
+      </body>
+</html>

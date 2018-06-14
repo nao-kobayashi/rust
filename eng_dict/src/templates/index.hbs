@@ -33,6 +33,7 @@
 
             <script type="text/javascript">
                   var list = {{list}};
+                  var detail_url = {{detail_path}};
 
                   window.onload = function() { 
                         var table = document.getElementById('wordslist');
@@ -41,8 +42,14 @@
                               var row = table.insertRow(-1);
                               var cellWordEn = row.insertCell(-1);
                               var cellMeanJa = row.insertCell(-1);
-                              cellWordEn.appendChild(document.createTextNode(list[i].phrase));
 
+                              //見出し
+                              var link = document.createElement("a");
+                              link.href = detail_url + encodeURI(list[i].phrase);
+                              link.appendChild(document.createTextNode(list[i].phrase));
+                              cellWordEn.appendChild(link);
+
+                              //意味
                               var ja_str = '';
                               for (var h = 0; h < list[i].words.length; h++) {
                                     ja_str += list[i].words[h] + "/";
