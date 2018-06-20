@@ -80,7 +80,11 @@ fn main() {
 
         let json_obj = match get_translate_all(word){
             Ok(data) => data,
-            Err(e) => return Ok(resp)
+            Err(e) => 
+            {
+                println!("error at get_translate_all. {}", e);
+                return Ok(resp);
+            }
         };
         let json_str = json_obj.to_string().replace("\"", "'");
 

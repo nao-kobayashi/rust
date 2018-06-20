@@ -1,8 +1,10 @@
 use bson;
-use translate_result::{ TranslateResult, SearchFilter };
+use translate_result::TranslateResult;
 use mongodb::{ Client, ThreadedClient };
 use mongodb::db::ThreadedDatabase;
 use mongodb::coll::Collection;
+use mongodb::cursor::Cursor;
+use mongodb::coll::options::FindOptions;
 use serde_json;
 
 const MONGODB: &str = "192.168.56.2";
@@ -49,64 +51,20 @@ impl Mongo {
 
     pub fn check_exists(&self, phrase: String) -> Result<i64, String> {
         let coll = &self.coll;
-        let filter_str = format!("{{\"phrase\":\"{}\"}}", phrase);
-        println!("{}", filter_str);
-        let filter: SearchFilter =  match serde_json::from_str(filter_str.as_str()) {
-            Ok(j) => j,
-            Err(e) => return Err(format!("'serialize error at check_exists. {}'", e.to_string()))
-        };
-
-        let count = match bson::to_bson(&filter) {
-            Ok(filter_document) => {
-                match filter_document {
-                    bson::Bson::Document(filter_document_doc) => {
-                        match coll.count(Some(filter_document_doc), None) {
-                            Ok(count) => count,
-                            Err(e) => return Err(format!("'error mongodb count.{}'", &e.to_string()))
-                        }
-                    },
-                    _ =>  {
-                        return Err(format!("'failed to create filter document model.'"))
-                    }
-                }
-            },
-            Err(e) => {
-                return Err(format!("'failed to create filter document model.{}'", &e.to_string()));
-            }
-
+        
+        let bson_filter = self.get_bson_paramter("phrase".to_string(), phrase);
+        let count = match coll.count(Some(bson_filter), None) {
+            Ok(cursor) => cursor,
+            Err(e) => return Err(format!("'error mongodb count.{}'", &e.to_string()))
         };
 
         Ok(count)
     }
 
-
-
     pub fn get_json(&self, phrase: String) -> Result<TranslateResult, String> {
-        let coll = &self.coll;
-        let filter_str = format!("{{\"phrase\":\"{}\"}}", phrase);
-        println!("{}", filter_str);
-        let filter: SearchFilter =  match serde_json::from_str(filter_str.as_str()) {
-            Ok(j) => j,
-            Err(e) => return Err(format!("'serialize error at check_exists. {}'", e.to_string()))
-        };
-
-        let cursor = match bson::to_bson(&filter) {
-            Ok(filter_document) => {
-                match filter_document {
-                    bson::Bson::Document(filter_document_doc) => {
-                        match coll.find(Some(filter_document_doc), None) {
-                            Ok(cursor) => cursor,
-                            Err(e) => return Err(format!("'error mongodb find.{}'", &e.to_string()))
-                        }
-                    },
-                    _ =>  {
-                        return Err(format!("'failed to create filter document model.'"))
-                    }
-                }
-            },
-            Err(e) => {
-                return Err(format!("'failed to create filter document model.{}'", &e.to_string()));
-            }
+        let cursor = match self.get_find_cursor(phrase) {
+            Ok(cursor) => cursor,
+            Err(e) => return Err(e),
         };
 
         for result in cursor { 
@@ -115,7 +73,7 @@ impl Mongo {
                 let json_obj: serde_json::value::Value = bson_obj.clone().into();
                 match serde_json::from_value(json_obj) {
                     Ok(data) => return Ok(data),
-                    Err(e) => return Err(format!("error convert serde_json to object model. {}", e.to_string()))
+                    Err(e) => return Err(format!("'error convert serde_json to object model. {}'", e.to_string()))
                 }
             }
         }
@@ -124,31 +82,9 @@ impl Mongo {
     }
 
     pub fn get_raw_json(&self, phrase: String) -> Result<serde_json::value::Value, String> {
-        let coll = &self.coll;
-        let filter_str = format!("{{\"phrase\":\"{}\"}}", phrase);
-        println!("{}", filter_str);
-        let filter: SearchFilter =  match serde_json::from_str(filter_str.as_str()) {
-            Ok(j) => j,
-            Err(e) => return Err(format!("'serialize error at check_exists. {}'", e.to_string()))
-        };
-
-        let cursor = match bson::to_bson(&filter) {
-            Ok(filter_document) => {
-                match filter_document {
-                    bson::Bson::Document(filter_document_doc) => {
-                        match coll.find(Some(filter_document_doc), None) {
-                            Ok(cursor) => cursor,
-                            Err(e) => return Err(format!("'error mongodb find.{}'", &e.to_string()))
-                        }
-                    },
-                    _ =>  {
-                        return Err(format!("'failed to create filter document model.'"))
-                    }
-                }
-            },
-            Err(e) => {
-                return Err(format!("'failed to create filter document model.{}'", &e.to_string()));
-            }
+        let cursor = match self.get_find_cursor(phrase) {
+            Ok(cursor) => cursor,
+            Err(e) => return Err(e),
         };
 
         for result in cursor { 
@@ -168,7 +104,14 @@ impl Mongo {
 
     pub fn get_translated_list(&self) -> String {
         let coll = &self.coll;
-        let cursor = match coll.find(None, None) {
+
+        let mut param_doc = bson::ordered::OrderedDocument::new();
+        param_doc.insert("phrase".to_string(), 1 as i32);
+
+        let mut find_option = FindOptions::new();
+        find_option.sort = Some(param_doc);
+
+        let cursor = match coll.find(None, Some(find_option)) {
             Ok(cursor) => cursor,
             Err(e) => {
                 return format!("error mongodb find. {:?}", e);
@@ -199,6 +142,24 @@ impl Mongo {
         }
 
         result_str
+    }
+
+    fn get_bson_paramter(&self, col_name: String, filter: String) -> bson::Document {
+        let mut param_doc = bson::ordered::OrderedDocument::new();
+        param_doc.insert(col_name, filter);
+        param_doc
+    }
+
+    fn get_find_cursor(&self, phrase: String) -> Result<Cursor, String> {
+        let coll = &self.coll;
+
+        let bson_filter = self.get_bson_paramter("phrase".to_string(), phrase);
+        let cursor = match coll.find(Some(bson_filter), None) {
+            Ok(cursor) => cursor,
+            Err(e) => return Err(format!("'error mongodb find.{}'", &e.to_string()))
+        };
+
+        Ok(cursor)
     }
 }
 

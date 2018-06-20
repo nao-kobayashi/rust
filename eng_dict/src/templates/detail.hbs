@@ -1,12 +1,56 @@
 <!doctype html>
 <html lang="ja">
       <head>
+            <style type="text/css">
+                  table, th, td {
+                        border-collapse: collapse;
+                        border: 1px solid #ccc;
+                        line-height: 1.5;
+                  }
+
+                  table.list th {
+                        min-width: 150px;
+                        max-width: 1000px;
+                        padding: 10px;
+                        font-weight: bold;
+                        vertical-align: top;
+                        background: #3f3f3f;
+                        color: #ffffff;
+                  }
+
+                  table.list td {
+                        min-width: 150px;
+                        max-width: 1000px;
+                        padding: 10px;
+                        vertical-align: top;
+                  }
+
+                  tr:nth-child(even) {
+                        background: skyblue;
+                  }
+            </style>
             <script type="text/javascript">
                   var words = {{message}};
 
                   window.onload = function() { 
+                        var table = document.getElementById('wordslist');
+
                         for (var i = 0; i < words.tuc.length; i++) {
-                              document.getElementById('msg').innerHTML += "<div>" + words.tuc[i].phrase.text + "</div>";
+                              var row = table.insertRow(-1);
+                              var cellWordEn = row.insertCell(-1);
+                              var cellMeanJa = row.insertCell(-1);
+
+                              //見出し
+                              cellWordEn.appendChild(document.createTextNode(words.tuc[i].phrase.text));
+
+                              //意味
+                              if (words.tuc[i].meanings) {
+                                    for (var h = 0; h < words.tuc[i].meanings.length; h++) {
+                                          var div = document.createElement('div');
+                                          div.appendChild(document.createTextNode(words.tuc[i].meanings[h].text));
+                                          cellMeanJa.appendChild(div);
+                                    }
+                              }
                         }
                   };
             </script>
@@ -19,7 +63,16 @@
                   <br />
                   <a href="{{list_path}}">一覧へ戻る</a>
                   <hr />
-                  <div id="msg"></div>
+                  <table id="wordslist" class="list">
+                        <tr>
+                              <th>
+                                    意味
+                              </th>
+                              <th>
+                                    付加情報
+                              </th>
+                        </tr>
+                  </table>
             </form>
       </body>
 </html>
