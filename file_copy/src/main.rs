@@ -6,42 +6,35 @@ use std::fs::*;
 use std::path::PathBuf;
 use chrono::prelude::*;
 use std::process::Command;
+use std::thread;
+use std::sync::mpsc;
 
 mod conf_ini;
 
-struct Arguments {
-    path_from: PathBuf,
-    path_to: PathBuf
+struct Arguments<'a> {
+    path_from: Box<&'a str>,
+    path_to: Box<&'a str>
 }
 
-fn check_arguments(args: &Vec<String>) -> Result<Arguments, String> {
+fn check_arguments(args: Vec<String>) -> Result<(PathBuf, PathBuf), String> {
 
-    if args.len() != 4 {
+    if args.len() != 3 {
         return Err("Parameter count is wrong.".to_owned());
     }
 
-    if args[1] != "batch" {
-        return Err("Invalid parameter".to_owned());
-    }
-
-    let dir = &args[2];
-    let path_from = PathBuf::from(&dir);
+    let dir = &args[1];
+    let path_from: PathBuf = PathBuf::from(&dir);
     if !path_from.is_dir() {
         return Err("Not found source directory.".to_owned());
     }
 
-    let dir_to = &args[3];
+    let dir_to = &args[2];
     let path_to = PathBuf::from(&dir_to);
     if !path_to.is_dir() {
         return Err("Not found destination directory.".to_owned());
     }
-
-    let arguments = Arguments {
-        path_from: path_from,
-        path_to: path_to
-    };
-
-    Ok(arguments)
+    
+    Ok((path_from, path_to))
 }
 
 
@@ -57,7 +50,7 @@ fn main() {
     let inifile = conf_ini::ConfIni::new(&exe_path);
 
     //パラメータのチェック
-    let mut arguments = match check_arguments(&args) {
+    let param_pathes = match check_arguments(args) {
         Ok(arguments) => {
             arguments
         },
@@ -65,6 +58,11 @@ fn main() {
             println!("{:?}", msg);
             return;
         }
+    };
+
+    let arguments = Arguments {
+        path_from: Box::new(param_pathes.0.to_str().unwrap()),
+        path_to: Box::new(param_pathes.1.to_str().unwrap())
     };
 
     //1日前をセット
@@ -84,54 +82,73 @@ fn main() {
     println!("target date is over {:?}", last_update_date);
     let mut most_newest_date = last_update_date.clone();
 
-    //取込対象ファイルをコピー
-    match read_dir(arguments.path_from) {
-        Err(err) => println!("{:?}", err.kind()),
-        Ok(paths) => {
-            for path in paths {
-                let p = path.unwrap().path();
-                if p.is_file() {
-                    let metadata = metadata(&p) ;
-                    let mod_date: DateTime<Local> = match metadata {
-                        Ok(metadata) => {
-                            metadata.modified().unwrap().into()
-                        },
-                        Err(e) => panic!("file property not read. {:?}", e)
-                    };
-                    
-                    //前回に処理した最終更新日より新しいファイルを対象とする
-                    if last_update_date < mod_date {
-                        //より新しい日付を保存する。
-                        if most_newest_date < mod_date {
-                            most_newest_date = mod_date;
-                        }
+    let paths = match read_dir(PathBuf::from(arguments.path_from.as_ref().to_string())) {
+        Err(err) => {
+            println!("{:?}", err.kind());
+            std::process::exit(0);
+        }
+        Ok(paths) => paths
+    };
 
-                        println!("copy target {:?}", &p);
-                        arguments.path_to.push(&p.file_name().unwrap());
-                        println!("copy dest {:?}", &arguments.path_to.as_path());
-                        match copy(&p, &arguments.path_to.as_path()) {
-                            Ok(ret_cd) => {
-                                println!("Copy OK {}KB", ret_cd as f32 / 1024 as f32)
-                            },
-                            _ => println!("Copy NG"),
-                        }
-                        arguments.path_to.pop();
+    let mut path_count = 0;
+    let (tx, rx) = mpsc::channel();
+    let handles: Vec<_>  = paths.map(|p| {
+        let tx_clone = tx.clone();
+        let p_str = p.unwrap().path().to_str().unwrap().to_owned();
+        let mut path_to = PathBuf::from(arguments.path_to.as_ref().to_string());
+        path_count = path_count + 1;
+        thread::spawn(move || {
+            let path_closure = PathBuf::from(p_str);
+            if path_closure.is_file() {
+                let metadata = metadata(&path_closure) ;
+                let mod_date: DateTime<Local> = match metadata {
+                    Ok(metadata) => {
+                        metadata.modified().unwrap().into()
+                    },
+                    Err(e) => panic!("file property not read. {:?}", e)
+                };
+                
+                //前回に処理した最終更新日より新しいファイルを対象とする
+                if last_update_date < mod_date {
+                    println!("copy target {:?}", &path_closure);
+                    path_to.push(&path_closure.file_name().unwrap());
+                    println!("copy dest {:?}", &path_to.as_path());
+                    match copy(&path_closure, &path_to.as_path()) {
+                        Ok(ret_cd) => {
+                            println!("Copy OK {}KB", ret_cd as f32 / 1024 as f32)
+                        },
+                        _ => println!("Copy NG"),
                     }
+                    path_to.pop();
                 }
+                tx_clone.send(mod_date).unwrap();
+            } else {
+                tx_clone.send(last_update_date).unwrap();
             }
-        },
+        })
+    }).collect();
+
+
+    //全部のスレッドが終了するまで待つ
+    for h in handles {
+        h.join().unwrap();
+        let temp_date = rx.recv().unwrap();
+        if most_newest_date < temp_date {
+            most_newest_date = temp_date;
+        }
     }
+
     
     //外部プログラム呼び出し
     let command_name = inifile.get_ini_value("command".to_string());
     if !command_name.is_empty() {
         Command::new(command_name)
-            .arg(&arguments.path_to)
+            .arg(arguments.path_to.as_ref())
             .output().
             expect("failed to execute process");
 
         //コピーしたファイルを削除
-        match read_dir(arguments.path_to) {
+        match read_dir(arguments.path_to.as_ref().to_string()) {
             Err(e) => println!("{:?}", e.kind()),
             Ok(paths) => {
                 for path in paths {
