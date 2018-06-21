@@ -12,6 +12,7 @@ const LIST_LIMIT_DISP_WORDS: i32 = 15;
 
 pub struct Mongo {
     coll: Collection,
+    account_coll: Collection,
 }
 
 impl Mongo {
@@ -19,9 +20,11 @@ impl Mongo {
     pub fn new() -> Mongo { 
         let client = Client::connect(MONGODB, 27017).expect("'failed to connect mongodb'");
         let collection = client.db("translate").collection("words_en");
+        let account_coll = client.db("translate").collection("account");
 
         Mongo {
-            coll: collection
+            coll: collection,
+            account_coll: account_coll
         }
     }
 
@@ -44,7 +47,7 @@ impl Mongo {
             Err(e) => {
                 return Err(format!("'failed to create new document model.{}'", &e.to_string()));
             }
-        }        
+        } 
 
         Ok(())
     }
@@ -142,6 +145,48 @@ impl Mongo {
         }
 
         result_str
+    }
+
+    pub fn check_account(&self, user: String, pass: String) -> Option<i64> {
+        let coll = &self.account_coll;
+        let mut param_doc = bson::ordered::OrderedDocument::new();
+        param_doc.insert("user", user);
+        param_doc.insert("pass", pass);
+/*
+        let json_str = format!("{{\"user\":\"{}\",\"pass\":\"{}\"}}", user, pass);
+        let json: Account = match serde_json::from_str(json_str.as_str()) {
+            Ok(j) => j,
+            Err(e) => {
+                print!("'failed to convert account struct.{}'", &e.to_string());
+                return None
+            }
+        };
+
+        let param_doc = match bson::to_bson(&json) {
+            Ok(document) => {
+                match document {
+                    bson::Bson::Document(document_doc) => {
+                        document_doc
+                    },
+                    _ =>  {
+                        print!("'failed to create new document model.'");
+                        return None
+                    }
+                }
+            },
+            Err(e) => {
+                print!("'failed to create new document model.{}'", &e.to_string());
+                return None
+            }
+        };
+*/
+        match coll.count(Some(param_doc), None) {
+            Ok(count) => Some(count),
+            Err(e) => {
+                println!("account_check {:?}", e);
+                None
+            },
+        }
     }
 
     fn get_bson_paramter(&self, col_name: String, filter: String) -> bson::Document {

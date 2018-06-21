@@ -21,9 +21,15 @@ pub struct MeanItem {
     pub language: String,
     pub text: String,
 }
-
+/*
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SearchFilter {
     pub phrase : String
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Account {
+    pub user : String,
+    pub pass : String
+}
+*/

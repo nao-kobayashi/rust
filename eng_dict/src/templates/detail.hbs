@@ -1,34 +1,8 @@
 <!doctype html>
 <html lang="ja">
       <head>
-            <style type="text/css">
-                  table, th, td {
-                        border-collapse: collapse;
-                        border: 1px solid #ccc;
-                        line-height: 1.5;
-                  }
-
-                  table.list th {
-                        min-width: 150px;
-                        max-width: 1000px;
-                        padding: 10px;
-                        font-weight: bold;
-                        vertical-align: top;
-                        background: #3f3f3f;
-                        color: #ffffff;
-                  }
-
-                  table.list td {
-                        min-width: 150px;
-                        max-width: 1000px;
-                        padding: 10px;
-                        vertical-align: top;
-                  }
-
-                  tr:nth-child(even) {
-                        background: skyblue;
-                  }
-            </style>
+            <link href="css/normalize.css" type="text/css" rel="stylesheet" />
+            <link href="css/skeleton.css" type="text/css" rel="stylesheet" />            
             <script type="text/javascript">
                   var words = {{message}};
 
@@ -57,9 +31,9 @@
       </head>
       <body>
             <form action={{translate_path}} method="POST">
-                  <h1>vocabulary notebook</h1>
+                  <h2>vocabulary notebook</h2>
                   <input type="text" name="word"/>
-                  <input type="submit" value="exec"/>
+                  <input class="button-primary" type="submit" value="exec"/>
                   <br />
                   <a href="{{list_path}}">一覧へ戻る</a>
                   <hr />
